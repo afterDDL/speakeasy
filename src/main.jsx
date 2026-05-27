@@ -1620,7 +1620,7 @@ function speakText(text, examiner, rate, hooks = {}) {
     }
     hooks.onError?.(getSpeechSynthesisErrorMessage(event.error));
   };
-  const preferred = pickEnglishVoice();
+  const preferred = pickEnglishVoice(examiner);
   if (preferred) utterance.voice = preferred;
   window.setTimeout(() => {
     if (requestId !== speechRequestId) return;
@@ -1642,11 +1642,36 @@ function getSpeechSynthesisErrorMessage(error) {
   return '浏览器朗读服务暂时不可用。请点“重播题目”再试，或换用 Chrome / Edge。';
 }
 
-function pickEnglishVoice() {
+function pickEnglishVoice(examiner) {
   if (!window.speechSynthesis) return null;
   const voices = window.speechSynthesis.getVoices();
-  return voices.find((voice) => voice.lang?.toLowerCase().startsWith('en') && /natural|online|aria|jenny|guy|susan|google|microsoft/i.test(voice.name))
-    || voices.find((voice) => voice.lang?.toLowerCase().startsWith('en'));
+  const englishVoices = voices.filter((voice) => voice.lang?.toLowerCase().startsWith('en'));
+  if (!englishVoices.length) return null;
+  const femaleNames = /aria|ava|emma|jenny|joanna|karen|linda|moira|samantha|serena|susan|tessa|zira|female|woman/i;
+  const maleNames = /brian|daniel|david|george|guy|james|mark|ryan|thomas|william|male|man/i;
+  const wantsFemale = examiner?.id === 'priya' || examiner?.id === 'maya';
+  const genderMatch = wantsFemale ? femaleNames : maleNames;
+  const preferred = englishVoices
+    .map((voice) => ({
+      voice,
+      score: getVoiceScore(voice, genderMatch, examiner),
+    }))
+    .sort((a, b) => b.score - a.score || a.voice.name.localeCompare(b.voice.name));
+  return preferred[0]?.voice || englishVoices[0];
+}
+
+function getVoiceScore(voice, genderMatch, examiner) {
+  const name = voice.name || '';
+  const lang = voice.lang || '';
+  let score = 0;
+  if (genderMatch.test(name)) score += 100;
+  if (/natural|online|neural|premium/i.test(name)) score += 16;
+  if (/microsoft|google|apple/i.test(name)) score += 8;
+  if (examiner?.id === 'alex' && /^en-GB/i.test(lang)) score += 24;
+  if (examiner?.id === 'priya' && /^en-IN/i.test(lang)) score += 24;
+  if (examiner?.id === 'maya' && /^en-US/i.test(lang)) score += 12;
+  if (examiner?.id === 'kenji' && /^en-/i.test(lang)) score += 8;
+  return score;
 }
 
 function buildQuestionSpeechText(step) {
