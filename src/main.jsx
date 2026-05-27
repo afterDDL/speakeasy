@@ -230,6 +230,8 @@ function Practice({ params }) {
   const [answerLeft, setAnswerLeft] = useState(getAnswerSeconds(plan.steps[0], settings, isFullExam));
   const [examinerSpeaking, setExaminerSpeaking] = useState(false);
   const [speechError, setSpeechError] = useState('');
+  const [voiceEnabled, setVoiceEnabled] = useState(false);
+  const [speechSupported] = useState(Boolean(window.speechSynthesis && window.SpeechSynthesisUtterance));
   const completingRef = useRef(false);
   const step = flowSteps[index];
   const isLast = index === flowSteps.length - 1;
@@ -247,31 +249,16 @@ function Practice({ params }) {
   }, [index, flowSteps.length]);
 
   useEffect(() => {
-    if (!step || !examStarted) return undefined;
+    if (!step || !examStarted || !voiceEnabled) return undefined;
     const timer = window.setTimeout(() => {
-      const hooks = {
-        onStart: () => {
-          setSpeechError('');
-          setExaminerSpeaking(true);
-        },
-        onEnd: () => setExaminerSpeaking(false),
-        onError: (message) => {
-          setExaminerSpeaking(false);
-          setSpeechError(message);
-        },
-      };
-      if (isFullExam) {
-        speakExamText(buildExamSpeechText(step, previousStep, phase, index), examiner, hooks);
-      } else {
-        speakQuestion(step, examiner, hooks);
-      }
+      speakCurrentQuestion();
     }, 450);
     return () => {
       window.clearTimeout(timer);
       cancelSpeechPlayback();
       setExaminerSpeaking(false);
     };
-  }, [index, examStarted]);
+  }, [index, examStarted, voiceEnabled]);
 
   useEffect(() => {
     if (!examStarted || phase !== 'prep') return undefined;
@@ -309,7 +296,7 @@ function Practice({ params }) {
   }, [answerLeft, phase, isFullExam, examStarted, answer]);
 
   useEffect(() => {
-    if (!isFullExam || !examStarted || phase !== 'answer' || step?.type !== 'part2') return undefined;
+    if (!isFullExam || !examStarted || !voiceEnabled || phase !== 'answer' || step?.type !== 'part2') return undefined;
     if (answerLeft !== getAnswerSeconds(step, settings, isFullExam)) return undefined;
     const timer = window.setTimeout(() => speakExamText('Your preparation time is over. Please start speaking now.', examiner, {
       onStart: () => {
@@ -323,7 +310,7 @@ function Practice({ params }) {
       },
     }), 350);
     return () => window.clearTimeout(timer);
-  }, [phase, index]);
+  }, [phase, index, voiceEnabled]);
 
   useEffect(() => {
     if (!isFullExam || !examStarted) return undefined;
@@ -342,6 +329,37 @@ function Practice({ params }) {
   function exitPractice() {
     if (isFullExam && examStarted && !window.confirm('完整模拟尚未结束，确定要退出吗？本次未完成内容不会生成报告。')) return;
     navigate('/');
+  }
+
+  function getSpeechHooks() {
+    return {
+      onStart: () => {
+        setSpeechError('');
+        setExaminerSpeaking(true);
+      },
+      onEnd: () => setExaminerSpeaking(false),
+      onError: (message) => {
+        setExaminerSpeaking(false);
+        setSpeechError(message);
+      },
+    };
+  }
+
+  function speakCurrentQuestion() {
+    if (!step) return;
+    const hooks = getSpeechHooks();
+    if (isFullExam) speakExamText(buildExamSpeechText(step, previousStep, phase, index), examiner, hooks);
+    else speakQuestion(step, examiner, hooks);
+  }
+
+  function enableExaminerVoice() {
+    if (!speechSupported) {
+      setSpeechError('当前浏览器不支持语音合成。请使用 Chrome / Edge 打开；如果是在应用内置浏览器或微信内置浏览器中访问，考官朗读可能不可用。');
+      return;
+    }
+    setVoiceEnabled(true);
+    setSpeechError('');
+    window.setTimeout(() => speakCurrentQuestion(), 60);
   }
 
   function saveAndMove({ auto = false } = {}) {
@@ -424,6 +442,11 @@ function Practice({ params }) {
           <ExaminerAvatar examiner={examiner} speaking={examinerSpeaking} />
           <strong>{examiner.name}</strong>
           <small>{examinerSpeaking ? '考官正在读题' : isFullExam ? '完整模拟进行中' : phase === 'prep' ? '请准备话题卡' : '考官正在聆听'}</small>
+          <VoiceControl
+            enabled={voiceEnabled}
+            supported={speechSupported}
+            onEnable={enableExaminerVoice}
+          />
         </div>
 
         <QuestionCard
@@ -439,19 +462,8 @@ function Practice({ params }) {
             cancelSpeechPlayback();
             setExaminerSpeaking(false);
             setSpeechError('');
-            const hooks = {
-              onStart: () => {
-                setSpeechError('');
-                setExaminerSpeaking(true);
-              },
-              onEnd: () => setExaminerSpeaking(false),
-              onError: (message) => {
-                setExaminerSpeaking(false);
-                setSpeechError(message);
-              },
-            };
-            if (isFullExam) speakExamText(buildExamSpeechText(step, previousStep, phase, index), examiner, hooks);
-            else speakQuestion(step, examiner, hooks);
+            setVoiceEnabled(true);
+            window.setTimeout(() => speakCurrentQuestion(), 60);
           }}
           onSkipPrep={() => setPhase('answer')}
         />
@@ -552,6 +564,21 @@ function ExaminerAvatar({ examiner, speaking = false }) {
         <i />
       </span>
     </div>
+  );
+}
+
+function VoiceControl({ enabled, supported, onEnable }) {
+  if (!supported) {
+    return <small className="voice-status unavailable">当前浏览器不支持考官朗读</small>;
+  }
+  if (enabled) {
+    return <small className="voice-status enabled">考官语音已启用</small>;
+  }
+  return (
+    <button className="voice-enable-button" onClick={onEnable}>
+      <Volume2 size={15} />
+      启用考官语音
+    </button>
   );
 }
 

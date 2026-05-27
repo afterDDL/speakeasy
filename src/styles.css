@@ -321,6 +321,33 @@ small {
   margin: 28px 0;
 }
 
+.voice-enable-button {
+  min-height: 30px;
+  border: 0;
+  border-radius: 999px;
+  padding: 0 12px;
+  color: #007aff;
+  background: #eef6ff;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.voice-status {
+  color: #8e8e93;
+  font-size: 13px;
+}
+
+.voice-status.enabled {
+  color: #34c759;
+}
+
+.voice-status.unavailable {
+  color: #b42318;
+}
+
 .speaking-avatar {
   position: relative;
   display: grid;
