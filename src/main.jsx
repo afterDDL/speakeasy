@@ -208,6 +208,7 @@ function Practice({ params }) {
   const [prepLeft, setPrepLeft] = useState(settings.part2PrepSeconds);
   const [answerLeft, setAnswerLeft] = useState(getAnswerSeconds(plan.steps[0], settings, isFullExam));
   const [examinerSpeaking, setExaminerSpeaking] = useState(false);
+  const [speechError, setSpeechError] = useState('');
   const completingRef = useRef(false);
   const step = flowSteps[index];
   const isLast = index === flowSteps.length - 1;
@@ -227,16 +228,21 @@ function Practice({ params }) {
   useEffect(() => {
     if (!step || !examStarted) return undefined;
     const timer = window.setTimeout(() => {
+      const hooks = {
+        onStart: () => {
+          setSpeechError('');
+          setExaminerSpeaking(true);
+        },
+        onEnd: () => setExaminerSpeaking(false),
+        onError: (message) => {
+          setExaminerSpeaking(false);
+          setSpeechError(message);
+        },
+      };
       if (isFullExam) {
-        speakExamText(buildExamSpeechText(step, previousStep, phase, index), examiner, {
-          onStart: () => setExaminerSpeaking(true),
-          onEnd: () => setExaminerSpeaking(false),
-        });
+        speakExamText(buildExamSpeechText(step, previousStep, phase, index), examiner, hooks);
       } else {
-        speakQuestion(step, examiner, {
-          onStart: () => setExaminerSpeaking(true),
-          onEnd: () => setExaminerSpeaking(false),
-        });
+        speakQuestion(step, examiner, hooks);
       }
     }, 450);
     return () => {
@@ -285,8 +291,15 @@ function Practice({ params }) {
     if (!isFullExam || !examStarted || phase !== 'answer' || step?.type !== 'part2') return undefined;
     if (answerLeft !== getAnswerSeconds(step, settings, isFullExam)) return undefined;
     const timer = window.setTimeout(() => speakExamText('Your preparation time is over. Please start speaking now.', examiner, {
-      onStart: () => setExaminerSpeaking(true),
+      onStart: () => {
+        setSpeechError('');
+        setExaminerSpeaking(true);
+      },
       onEnd: () => setExaminerSpeaking(false),
+      onError: (message) => {
+        setExaminerSpeaking(false);
+        setSpeechError(message);
+      },
     }), 350);
     return () => window.clearTimeout(timer);
   }, [phase, index]);
@@ -397,11 +410,22 @@ function Practice({ params }) {
           phase={phase}
           prepLeft={prepLeft}
           examinerCue={examinerCue}
+          speechError={speechError}
           strictExam={isFullExam}
           questionVisible={questionVisible}
           onToggleQuestion={() => setQuestionVisible((value) => !value)}
           onReplayQuestion={() => {
-            const hooks = { onStart: () => setExaminerSpeaking(true), onEnd: () => setExaminerSpeaking(false) };
+            const hooks = {
+              onStart: () => {
+                setSpeechError('');
+                setExaminerSpeaking(true);
+              },
+              onEnd: () => setExaminerSpeaking(false),
+              onError: (message) => {
+                setExaminerSpeaking(false);
+                setSpeechError(message);
+              },
+            };
             if (isFullExam) speakExamText(buildExamSpeechText(step, previousStep, phase, index), examiner, hooks);
             else speakQuestion(step, examiner, hooks);
           }}
@@ -425,11 +449,12 @@ function Practice({ params }) {
   );
 }
 
-function QuestionCard({ step, phase, prepLeft, examinerCue, strictExam, questionVisible, onToggleQuestion, onReplayQuestion, onSkipPrep }) {
+function QuestionCard({ step, phase, prepLeft, examinerCue, speechError, strictExam, questionVisible, onToggleQuestion, onReplayQuestion, onSkipPrep }) {
   const canHideQuestion = step.type === 'part1' || step.type === 'part3';
   return (
     <section className={`question-card ${canHideQuestion && !questionVisible ? 'question-card-hidden' : ''}`}>
       {examinerCue && <div className="examiner-cue"><Volume2 size={16} /><span>{examinerCue}</span></div>}
+      {speechError && <div className="inline-warning"><strong>考官朗读不可用</strong><span>{speechError}</span></div>}
       <div className="question-card-head">
         <span className="pill">{partLabel(step.type)}</span>
         {canHideQuestion && (
@@ -1368,37 +1393,40 @@ function buildExamSpeechText(step, previousStep, phase, index) {
 }
 
 function speakExamText(text, examiner, hooks = {}) {
-  if (!window.speechSynthesis || !text) return;
-  window.speechSynthesis.cancel();
-  const utterance = new SpeechSynthesisUtterance(text);
-  utterance.lang = 'en-US';
-  utterance.rate = 0.9;
-  utterance.pitch = examiner?.id === 'kenji' ? 0.92 : 1;
-  utterance.onstart = hooks.onStart || null;
-  utterance.onend = hooks.onEnd || null;
-  utterance.onerror = hooks.onEnd || null;
-  const voice = pickEnglishVoice();
-  if (voice) utterance.voice = voice;
-  window.speechSynthesis.speak(utterance);
+  return speakText(text, examiner, 0.9, hooks);
 }
 
 function speakQuestion(step, examiner, hooks = {}) {
-  if (!window.speechSynthesis || !step) return;
+  if (!step) return false;
+  return speakText(buildQuestionSpeechText(step), examiner, 0.92, hooks);
+}
+
+function speakText(text, examiner, rate, hooks = {}) {
+  if (!text) return false;
+  if (!window.speechSynthesis || !window.SpeechSynthesisUtterance) {
+    hooks.onError?.('当前浏览器不支持语音合成。请使用 Chrome / Edge 打开；如果是在应用内置浏览器或微信内置浏览器中访问，考官朗读可能不可用。');
+    return false;
+  }
   window.speechSynthesis.cancel();
-  const text = buildQuestionSpeechText(step);
+  window.speechSynthesis.resume?.();
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.lang = 'en-US';
-  utterance.rate = 0.92;
+  utterance.rate = rate;
   utterance.pitch = examiner?.id === 'kenji' ? 0.92 : 1;
   utterance.onstart = hooks.onStart || null;
   utterance.onend = hooks.onEnd || null;
-  utterance.onerror = hooks.onEnd || null;
+  utterance.onerror = () => hooks.onError?.('浏览器中断了本次朗读。请点“重播题目”再试，或换用 Chrome / Edge。');
   const preferred = pickEnglishVoice();
   if (preferred) utterance.voice = preferred;
-  window.speechSynthesis.speak(utterance);
+  window.setTimeout(() => {
+    window.speechSynthesis.speak(utterance);
+    window.speechSynthesis.resume?.();
+  }, 80);
+  return true;
 }
 
 function pickEnglishVoice() {
+  if (!window.speechSynthesis) return null;
   const voices = window.speechSynthesis.getVoices();
   return voices.find((voice) => voice.lang?.toLowerCase().startsWith('en') && /natural|online|aria|jenny|guy|susan|google|microsoft/i.test(voice.name))
     || voices.find((voice) => voice.lang?.toLowerCase().startsWith('en'));

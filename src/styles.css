@@ -589,6 +589,23 @@ textarea {
   font-size: 14px;
 }
 
+.inline-warning {
+  margin-bottom: 14px;
+  border: 1px solid #ffe08a;
+  border-radius: 12px;
+  background: #fff9e8;
+  color: #7a4f01;
+  padding: 12px 14px;
+  display: grid;
+  gap: 4px;
+  line-height: 1.5;
+}
+
+.inline-warning span {
+  color: #7a4f01;
+  font-size: 14px;
+}
+
 .practice-controls {
   margin-top: 18px;
   display: flex;
