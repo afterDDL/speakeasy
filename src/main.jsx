@@ -49,6 +49,8 @@ const modes = [
   { id: 'full', label: '完整模拟', detail: 'Part 1 + 2 + 3', minutes: '~20分钟' },
 ];
 
+const singlePracticeMode = { id: 'single', label: '单题练习', detail: '题库单题模拟', minutes: '~2分钟' };
+
 function navigate(path) {
   window.location.hash = path;
 }
@@ -148,8 +150,9 @@ function HomePage() {
   );
 }
 
-function makePlan(mode) {
+function makePlan(mode, params = new URLSearchParams()) {
   const bank = getStoredQuestionBank(defaultQuestionBank);
+  if (mode === 'single') return makeSingleQuestionPlan(bank, params);
   const topic = getRandomPart2TopicFromBank(bank);
   const part1 = getPart1QuestionsFromBank(bank, mode === 'full' ? 5 : 8).map((q) => ({
     type: 'part1',
@@ -164,6 +167,40 @@ function makePlan(mode) {
   if (mode === 'part2') return { topic, steps: part2 };
   if (mode === 'part3') return { topic, steps: part3 };
   return { topic, steps: [...part1, ...part2, ...part3] };
+}
+
+function makeSingleQuestionPlan(bank, params) {
+  const part = params.get('part');
+  if (part === 'part1') {
+    const category = bank.part1.categories.find((cat) => cat.id === params.get('category'));
+    const question = category?.questions[Number(params.get('question'))];
+    if (category && question) {
+      return {
+        topic: { id: category.id, title_en: category.name_en, title_zh: category.name_zh },
+        steps: [{ type: 'part1', question: question.en, zh: question.zh, topicName: category.name_en, topicId: category.id }],
+      };
+    }
+  }
+  if (part === 'part2') {
+    const topic = findPart2TopicById(bank, params.get('topic')) || getRandomPart2TopicFromBank(bank);
+    return {
+      topic,
+      steps: [{ type: 'part2', question: topic.title_en, zh: topic.title_zh, prompts: topic.prompts }],
+    };
+  }
+  if (part === 'part3') {
+    const topic = findPart2TopicById(bank, params.get('topic')) || getRandomPart2TopicFromBank(bank);
+    const followUp = topic.follow_ups?.[Number(params.get('question'))] || getPart3QuestionsFromBank(bank, topic, 1)[0];
+    return {
+      topic,
+      steps: [{ type: 'part3', question: followUp?.en || 'What do you think about this topic?', zh: followUp?.zh || '' }],
+    };
+  }
+  const fallback = getPart1QuestionsFromBank(bank, 1)[0];
+  return {
+    topic: null,
+    steps: [{ type: 'part1', question: fallback?.en || 'Do you like your hometown?', zh: fallback?.zh || '' }],
+  };
 }
 
 function shuffle(items) {
@@ -201,6 +238,11 @@ function getRandomPart2TopicFromBank(bank) {
   };
 }
 
+function findPart2TopicById(bank, topicId) {
+  if (!topicId) return null;
+  return bank.part2_3.categories.flatMap((category) => category.topic_cards).find((topic) => topic.id === topicId) || null;
+}
+
 function getPart3QuestionsFromBank(bank, topic, limit = 6) {
   if (topic?.follow_ups?.length) {
     return shuffle(topic.follow_ups).slice(0, limit);
@@ -216,9 +258,10 @@ function getPart3QuestionsFromBank(bank, topic, limit = 6) {
 
 function Practice({ params }) {
   const examiner = examiners.find((item) => item.id === params.get('examiner')) || examiners[0];
-  const mode = modes.find((item) => item.id === params.get('mode')) || modes[0];
+  const mode = params.get('mode') === 'single' ? singlePracticeMode : modes.find((item) => item.id === params.get('mode')) || modes[0];
   const settings = getSettings();
-  const plan = useMemo(() => makePlan(mode.id), [mode.id]);
+  const planKey = params.toString();
+  const plan = useMemo(() => makePlan(mode.id, params), [mode.id, planKey]);
   const isFullExam = mode.id === 'full';
   const [examStarted, setExamStarted] = useState(!isFullExam);
   const [flowSteps, setFlowSteps] = useState(plan.steps);
@@ -439,7 +482,7 @@ function Practice({ params }) {
   }
 
   return (
-    <Shell title={mode.label} back="/" onBack={isFullExam ? exitPractice : undefined} actions={isFullExam ? <button className="secondary compact-button" onClick={exitPractice}>退出</button> : null}>
+    <Shell title={mode.label} back={mode.id === 'single' ? '/questions' : '/'} onBack={isFullExam ? exitPractice : undefined} actions={isFullExam ? <button className="secondary compact-button" onClick={exitPractice}>退出</button> : null}>
       <main className="practice-page">
         <div className="practice-progress">
           <span>{partLabel(step.type)} · {index + 1}/{flowSteps.length}</span>
@@ -976,6 +1019,11 @@ function QuestionBank() {
     setOpenTopicId('');
   }
 
+  function startSinglePractice(options) {
+    const search = new URLSearchParams({ examiner: examiners[1].id, mode: 'single', ...options });
+    navigate(`/practice?${search.toString()}`);
+  }
+
   return (
     <Shell title="题库管理" back="/">
       <main className="page">
@@ -1054,7 +1102,18 @@ function QuestionBank() {
               </div>
             ) : (
               <ul className="browse-question-list">
-                {cat.questions.map((q) => <li key={`${cat.id}-${q.originalIndex}`}>{q.en}</li>)}
+                {cat.questions.map((q) => (
+                  <li key={`${cat.id}-${q.originalIndex}`}>
+                    <span>{q.en}</span>
+                    <button
+                      className="ghost-button mini"
+                      onClick={() => startSinglePractice({ part: 'part1', category: cat.id, question: String(q.originalIndex) })}
+                    >
+                      <Play size={14} />
+                      单题练习
+                    </button>
+                  </li>
+                ))}
               </ul>
             )}
           </section>
@@ -1109,6 +1168,12 @@ function QuestionBank() {
                     </>
                   ) : (
                     <>
+                      <div className="topic-detail-actions">
+                        <button className="primary compact-button" onClick={() => startSinglePractice({ part: 'part2', topic: topic.id })}>
+                          <Play size={16} />
+                          练这张题卡
+                        </button>
+                      </div>
                       <h3>{topic.title_en}</h3>
                       <p>{topic.title_zh}</p>
                       {topic.prompts?.length > 0 && (
@@ -1120,7 +1185,18 @@ function QuestionBank() {
                         <strong>Part 3 追问</strong>
                         {topic.follow_ups?.length > 0 ? (
                           <ol>
-                            {topic.follow_ups.map((item) => <li key={item.en}>{item.en}</li>)}
+                            {topic.follow_ups.map((item, followUpIndex) => (
+                              <li key={`${item.en}-${followUpIndex}`}>
+                                <span>{item.en}</span>
+                                <button
+                                  className="ghost-button mini"
+                                  onClick={() => startSinglePractice({ part: 'part3', topic: topic.id, question: String(followUpIndex) })}
+                                >
+                                  <Play size={14} />
+                                  练这题
+                                </button>
+                              </li>
+                            ))}
                           </ol>
                         ) : (
                           <p>该题暂无明确关联追问，练习时会从同类 P3 题池抽题。</p>

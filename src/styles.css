@@ -486,6 +486,13 @@ small {
   font-weight: 650;
 }
 
+.ghost-button.mini {
+  min-height: 28px;
+  padding: 0 9px;
+  font-size: 12px;
+  flex: 0 0 auto;
+}
+
 .question-content {
   transition: 0.2s ease;
 }
@@ -947,13 +954,29 @@ textarea {
 
 .browse-question-list {
   margin: 0;
-  padding-left: 20px;
+  padding: 0;
+  list-style: none;
   color: #3a3a3c;
   line-height: 1.75;
 }
 
+.browse-question-list li,
+.followup-block li {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.browse-question-list li span,
+.followup-block li span {
+  min-width: 0;
+}
+
 .browse-question-list li + li {
-  margin-top: 4px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #f2f2f7;
 }
 
 .visually-hidden {
@@ -1011,6 +1034,11 @@ textarea {
   gap: 10px;
 }
 
+.topic-detail-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
 .topic-bank-detail label {
   display: grid;
   gap: 6px;
@@ -1036,6 +1064,10 @@ textarea {
   padding-left: 20px;
   color: #636366;
   line-height: 1.7;
+}
+
+.followup-block li + li {
+  margin-top: 8px;
 }
 
 .settings-panel {
