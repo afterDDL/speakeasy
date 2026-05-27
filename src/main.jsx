@@ -436,6 +436,8 @@ function Practice({ params }) {
           questionVisible={questionVisible}
           onToggleQuestion={() => setQuestionVisible((value) => !value)}
           onReplayQuestion={() => {
+            cancelSpeechPlayback();
+            setExaminerSpeaking(false);
             setSpeechError('');
             const hooks = {
               onStart: () => {
@@ -456,7 +458,18 @@ function Practice({ params }) {
 
         {phase === 'answer' && (
           <>
-            <SpeechBox key={`${index}-${step.question}`} value={answer} onChange={setAnswer} lang="en-US" showTranscript={settings.showAnswerDuringPractice} />
+            <SpeechBox
+              key={`${index}-${step.question}`}
+              value={answer}
+              onChange={setAnswer}
+              lang="en-US"
+              showTranscript={settings.showAnswerDuringPractice}
+              onBeforeStart={() => {
+                cancelSpeechPlayback();
+                setExaminerSpeaking(false);
+                setSpeechError('');
+              }}
+            />
             <div className="practice-controls">
               <span><Clock3 size={16} /> {isFullExam ? '考试计时' : '剩余'} {formatTime(answerLeft)}</span>
               <button className="primary" onClick={() => saveAndMove()} disabled={!isFullExam && !answer.trim()}>
@@ -542,7 +555,7 @@ function ExaminerAvatar({ examiner, speaking = false }) {
   );
 }
 
-function SpeechBox({ value, onChange, lang, showTranscript = true }) {
+function SpeechBox({ value, onChange, lang, showTranscript = true, onBeforeStart }) {
   const recognitionRef = useRef(null);
   const finalTextRef = useRef('');
   const resultSegmentsRef = useRef([]);
@@ -1423,7 +1436,7 @@ let speechRequestId = 0;
 
 function cancelSpeechPlayback() {
   speechRequestId += 1;
-  window.speechSynthesis?.cancel();
+    onBeforeStart?.();
   window.speechSynthesis?.resume?.();
 }
 
@@ -1468,6 +1481,8 @@ function speakText(text, examiner, rate, hooks = {}) {
   if (preferred) utterance.voice = preferred;
   window.setTimeout(() => {
     if (requestId !== speechRequestId) return;
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.resume?.();
     window.speechSynthesis.speak(utterance);
     window.speechSynthesis.resume?.();
   }, 80);
