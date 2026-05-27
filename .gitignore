@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.vite/
+.tools/
+*.log
+.env.local
+.env.*.local
+.dev.vars
+.wrangler/
