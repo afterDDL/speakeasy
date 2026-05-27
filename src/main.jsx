@@ -50,6 +50,7 @@ const modes = [
 ];
 
 const singlePracticeMode = { id: 'single', label: '单题练习', detail: '题库单题模拟', minutes: '~2分钟' };
+const appVersion = 'v0.1.0';
 
 function navigate(path) {
   window.location.hash = path;
@@ -1419,8 +1420,10 @@ function SettingsPage() {
           )}
         </section>
         <section className="developer-credit">
+          <span>如有任何问题与建议，欢迎联系开发者。</span>
           <span>开发者 afterDDL 的 GitHub：</span>
           <a href="https://github.com/afterDDL" target="_blank" rel="noreferrer">https://github.com/afterDDL</a>
+          <small>当前版本：{appVersion}</small>
         </section>
       </main>
     </Shell>

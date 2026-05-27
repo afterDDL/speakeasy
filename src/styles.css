@@ -1116,12 +1116,19 @@ textarea {
   font-size: 13px;
   text-align: center;
   line-height: 1.6;
+  display: grid;
+  justify-items: center;
+  gap: 2px;
 }
 
 .developer-credit a {
   color: #007aff;
   text-decoration: none;
   word-break: break-all;
+}
+
+.developer-credit small {
+  color: #aeaeb2;
 }
 
 .settings-panel input,
