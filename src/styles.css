@@ -572,6 +572,23 @@ textarea {
   font-size: 14px;
 }
 
+.inline-error {
+  margin: 12px 0 14px;
+  border: 1px solid #ffd6d2;
+  border-radius: 12px;
+  background: #fff7f6;
+  color: #b42318;
+  padding: 12px 14px;
+  display: grid;
+  gap: 4px;
+  line-height: 1.5;
+}
+
+.inline-error span {
+  color: #7a271a;
+  font-size: 14px;
+}
+
 .practice-controls {
   margin-top: 18px;
   display: flex;
@@ -975,9 +992,29 @@ textarea {
   gap: 14px;
 }
 
-.settings-panel label {
+.settings-panel label,
+.developer-settings {
   display: grid;
   gap: 8px;
+}
+
+.developer-settings {
+  border-top: 1px solid #e5e5ea;
+  padding-top: 14px;
+}
+
+.developer-credit {
+  margin-top: 18px;
+  color: #8e8e93;
+  font-size: 13px;
+  text-align: center;
+  line-height: 1.6;
+}
+
+.developer-credit a {
+  color: #007aff;
+  text-decoration: none;
+  word-break: break-all;
 }
 
 .settings-panel input,

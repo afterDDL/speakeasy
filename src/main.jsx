@@ -596,6 +596,14 @@ function SpeechBox({ value, onChange, lang, showTranscript = true }) {
 function Report({ id }) {
   const [session, setSession] = useState(() => getSession(id));
   const [busy, setBusy] = useState(false);
+  const [aiError, setAiError] = useState('');
+  const autoScoreStartedRef = useRef(false);
+  useEffect(() => {
+    if (!session || session.aiProvider || autoScoreStartedRef.current) return;
+    autoScoreStartedRef.current = true;
+    runDeepSeek();
+  }, [session?.id]);
+
   if (!session) {
     return <Shell title="练习报告" back="/"><main className="page empty">没有找到这次练习记录。</main></Shell>;
   }
@@ -603,13 +611,14 @@ function Report({ id }) {
 
   async function runDeepSeek() {
     setBusy(true);
+    setAiError('');
     try {
       const result = await scoreWithDeepSeek(session);
       const updated = { ...session, scores: result, aiProvider: 'deepseek' };
       saveSession(updated);
       setSession(updated);
     } catch (error) {
-      alert(error.message);
+      setAiError(error.message || 'AI 反馈生成失败，请稍后重试。');
     } finally {
       setBusy(false);
     }
@@ -670,9 +679,15 @@ function Report({ id }) {
           <div className="panel-title-row">
             <h2>逐题回看</h2>
             <button className="secondary" disabled={busy} onClick={runDeepSeek}>
-              <Sparkles size={17} /> {busy ? '正在请求 DeepSeek...' : '用 DeepSeek 生成精细反馈'}
+              <Sparkles size={17} /> {busy ? '正在请求 DeepSeek...' : session.aiProvider ? '重新生成 DeepSeek 反馈' : '用 DeepSeek 生成精细反馈'}
             </button>
           </div>
+          {aiError && (
+            <div className="inline-error">
+              <strong>AI 反馈暂时不可用</strong>
+              <span>{aiError}</span>
+            </div>
+          )}
           <div className="qa-list">
             {session.responses.map((item, idx) => (
               <article key={item.id}>
@@ -1148,6 +1163,7 @@ function getQuestionBankImportTemplate() {
 
 function SettingsPage() {
   const [settings, setLocalSettings] = useState(getSettings());
+  const [developerOpen, setDeveloperOpen] = useState(false);
   function update(patch) {
     const next = { ...settings, ...patch };
     setLocalSettings(next);
@@ -1178,17 +1194,33 @@ function SettingsPage() {
           <p className="hint">关闭后，练习时不会显示实时语音转文字，但报告页仍会保存和展示转写结果。</p>
         </section>
         <section className="panel settings-panel">
-          <h2>DeepSeek</h2>
-          <label>后端代理地址
-            <input value={settings.apiBaseUrl} placeholder="留空表示同源 /api/score" onChange={(e) => update({ apiBaseUrl: e.target.value })} />
-          </label>
-          <label>API Key
-            <input value={settings.deepseekApiKey} type="password" placeholder="sk-..." onChange={(e) => update({ deepseekApiKey: e.target.value })} />
-          </label>
-          <label>模型
-            <input value={settings.deepseekModel} onChange={(e) => update({ deepseekModel: e.target.value })} />
-          </label>
-          <p className="hint">正式部署时建议使用后端代理，把 DeepSeek Key 配在 Cloudflare 环境变量里。API Key 输入框仅作为本地开发兜底。</p>
+          <div className="panel-title-row">
+            <div>
+              <h2>开发者设置</h2>
+              <p className="hint">线上版本已通过后端代理连接 AI 评分，普通练习无需修改这里。</p>
+            </div>
+            <button className="secondary compact-button" onClick={() => setDeveloperOpen((value) => !value)}>
+              {developerOpen ? '收起' : '展开'}
+            </button>
+          </div>
+          {developerOpen && (
+            <div className="developer-settings">
+              <label>后端代理地址
+                <input value={settings.apiBaseUrl} placeholder="留空表示同源 /api/score" onChange={(e) => update({ apiBaseUrl: e.target.value })} />
+              </label>
+              <label>API Key
+                <input value={settings.deepseekApiKey} type="password" placeholder="sk-..." onChange={(e) => update({ deepseekApiKey: e.target.value })} />
+              </label>
+              <label>模型
+                <input value={settings.deepseekModel} onChange={(e) => update({ deepseekModel: e.target.value })} />
+              </label>
+              <p className="hint">这些选项仅用于本地开发或临时代理测试。公开部署请在 Cloudflare 环境变量中配置 DeepSeek Key。</p>
+            </div>
+          )}
+        </section>
+        <section className="developer-credit">
+          <span>开发者 afterDDL 的 GitHub：</span>
+          <a href="https://github.com/afterDDL" target="_blank" rel="noreferrer">https://github.com/afterDDL</a>
         </section>
       </main>
     </Shell>

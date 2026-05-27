@@ -4,6 +4,10 @@ SpeakEasy is an IELTS speaking practice app built for realistic self-practice: s
 
 This project started as a prototype and has been migrated into a maintainable Vite + React application with a lightweight Cloudflare Pages Function backend for AI scoring.
 
+Live demo: https://speakeasy-evd.pages.dev
+
+Recommended browsers: Chrome or Edge. Speech recognition depends on browser support and network availability; if transcription is unavailable, answers can still be typed manually.
+
 ## Highlights
 
 - IELTS Speaking practice modes: Part 1, Part 2, Part 3, and full mock test
