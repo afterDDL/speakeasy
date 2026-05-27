@@ -805,6 +805,7 @@ textarea {
 
 .bank-tools {
   margin-bottom: 18px;
+  gap: 8px;
 }
 
 .bank-tools input,
@@ -814,16 +815,17 @@ textarea {
 .topic-bank-detail input,
 .topic-bank-detail textarea,
 .editable-row input {
-  min-height: 34px;
+  min-height: 30px;
   border: 1px solid #e5e5ea;
   border-radius: 8px;
-  padding: 0 9px;
+  padding: 0 8px;
   background: #fff;
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .bank-tools input {
   flex: 1 1 260px;
+  max-width: none;
 }
 
 .bank-form {
@@ -843,6 +845,7 @@ textarea {
 
 .bank-tools select {
   flex: 0 0 150px;
+  max-width: none;
 }
 
 .bank-form textarea,

@@ -869,7 +869,7 @@ function QuestionBank() {
           <div className="panel-title-row">
             <div>
               <h2>当前题库</h2>
-              <p>浏览当前 IELTS 口语题库，按分类或关键词查找题目。题库维护工具已折叠，避免影响普通访问体验。</p>
+              <p>浏览当前 IELTS 口语题库，按分类或关键词查找 Part 1、Part 2 和 Part 3 题目。</p>
               <small>Part 1：{bankStats.part1} 题 · Part 2：{bankStats.part2} 张题卡 · Part 3：{bankStats.part3} 题</small>
             </div>
             <button className="secondary compact-button" onClick={() => setManageOpen((value) => !value)}>
