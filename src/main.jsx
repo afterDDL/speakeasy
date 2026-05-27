@@ -108,6 +108,7 @@ function HomePage() {
         <section className="section-head">
           <h1>口语练习</h1>
           <p>选择考官与练习模式，开始一次真实保存的口语练习。</p>
+          <p className="browser-note">强烈推荐使用 Android Chrome / Edge 或桌面 Chrome / Edge；iPhone、Safari、微信/QQ 等内置浏览器可能无法稳定完成语音识别。</p>
         </section>
         <h2 className="label">选择考官形象</h2>
         <div className="examiner-grid">
