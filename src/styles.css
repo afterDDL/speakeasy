@@ -798,6 +798,11 @@ textarea {
   justify-content: flex-end;
 }
 
+.manage-panel {
+  border-color: rgba(0, 122, 255, 0.22);
+  background: #f8fbff;
+}
+
 .bank-tools {
   margin-bottom: 18px;
 }
@@ -867,6 +872,17 @@ textarea {
 .editable-row .icon-link {
   width: 34px;
   height: 34px;
+}
+
+.browse-question-list {
+  margin: 0;
+  padding-left: 20px;
+  color: #3a3a3c;
+  line-height: 1.75;
+}
+
+.browse-question-list li + li {
+  margin-top: 4px;
 }
 
 .visually-hidden {

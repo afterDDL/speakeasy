@@ -745,6 +745,7 @@ function QuestionBank() {
   const [query, setQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [openTopicId, setOpenTopicId] = useState('');
+  const [manageOpen, setManageOpen] = useState(false);
   const [p1Draft, setP1Draft] = useState({ categoryId: '', en: '', zh: '' });
   const [topicDraft, setTopicDraft] = useState({ categoryId: '', title_en: '', title_zh: '', prompts: '', follow_ups: '' });
   const part1Categories = bank.part1.categories;
@@ -868,18 +869,32 @@ function QuestionBank() {
           <div className="panel-title-row">
             <div>
               <h2>当前题库</h2>
-              <p>题库编辑会保存在本机浏览器中，后续练习会直接使用当前版本。</p>
+              <p>浏览当前 IELTS 口语题库，按分类或关键词查找题目。题库维护工具已折叠，避免影响普通访问体验。</p>
               <small>Part 1：{bankStats.part1} 题 · Part 2：{bankStats.part2} 张题卡 · Part 3：{bankStats.part3} 题</small>
             </div>
-            <div className="toolbar-actions">
-              <button className="secondary" onClick={downloadImportTemplate}>下载导入模板</button>
-              <button className="secondary" onClick={exportBank}>导出 JSON</button>
-              <button className="secondary" onClick={() => fileInputRef.current?.click()}>导入 JSON</button>
-              <button className="ghost-button danger" onClick={restoreDefaultBank}>恢复内置</button>
-              <input ref={fileInputRef} className="visually-hidden" type="file" accept="application/json" onChange={importBank} />
-            </div>
+            <button className="secondary compact-button" onClick={() => setManageOpen((value) => !value)}>
+              {manageOpen ? '收起管理工具' : '管理题库'}
+            </button>
           </div>
         </section>
+
+        {manageOpen && (
+          <section className="panel compact manage-panel">
+            <div className="panel-title-row">
+              <div>
+                <h2>管理工具</h2>
+                <p>导入、导出和编辑会保存在本机浏览器中，后续练习会直接使用当前版本。</p>
+              </div>
+              <div className="toolbar-actions">
+                <button className="secondary" onClick={downloadImportTemplate}>下载导入模板</button>
+                <button className="secondary" onClick={exportBank}>导出 JSON</button>
+                <button className="secondary" onClick={() => fileInputRef.current?.click()}>导入 JSON</button>
+                <button className="ghost-button danger" onClick={restoreDefaultBank}>恢复内置</button>
+                <input ref={fileInputRef} className="visually-hidden" type="file" accept="application/json" onChange={importBank} />
+              </div>
+            </div>
+          </section>
+        )}
 
         <section className="bank-tools">
           <input value={query} placeholder="搜索英文题目、中文题名、分类..." onChange={(e) => setQuery(e.target.value)} />
@@ -895,7 +910,7 @@ function QuestionBank() {
           ))}
         </div>
 
-        {(tab === 'all' || tab === 'part1') && (
+        {manageOpen && (tab === 'all' || tab === 'part1') && (
           <section className="panel compact bank-editor">
             <h2>新增 Part 1 题目</h2>
             <form className="bank-form" onSubmit={addP1Question}>
@@ -913,19 +928,25 @@ function QuestionBank() {
         {(tab === 'all' || tab === 'part1') && filteredP1Categories.map((cat) => (
           <section className="panel compact" key={cat.id}>
             <h2>{cat.name_en}</h2>
-            <div className="editable-list">
-              {cat.questions.map((q) => (
-                <article className="editable-row" key={`${cat.id}-${q.originalIndex}`}>
-                  <input value={q.en} onChange={(e) => updateP1Question(cat.id, q.originalIndex, { en: e.target.value })} />
-                  <input value={q.zh || ''} placeholder="中文备注" onChange={(e) => updateP1Question(cat.id, q.originalIndex, { zh: e.target.value })} />
-                  <button className="icon-link danger" onClick={() => deleteP1Question(cat.id, q.originalIndex)}><Trash2 size={18} /></button>
-                </article>
-              ))}
-            </div>
+            {manageOpen ? (
+              <div className="editable-list">
+                {cat.questions.map((q) => (
+                  <article className="editable-row" key={`${cat.id}-${q.originalIndex}`}>
+                    <input value={q.en} onChange={(e) => updateP1Question(cat.id, q.originalIndex, { en: e.target.value })} />
+                    <input value={q.zh || ''} placeholder="中文备注" onChange={(e) => updateP1Question(cat.id, q.originalIndex, { zh: e.target.value })} />
+                    <button className="icon-link danger" onClick={() => deleteP1Question(cat.id, q.originalIndex)}><Trash2 size={18} /></button>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <ul className="browse-question-list">
+                {cat.questions.map((q) => <li key={`${cat.id}-${q.originalIndex}`}>{q.en}</li>)}
+              </ul>
+            )}
           </section>
         ))}
 
-        {(tab === 'all' || tab === 'part23') && (
+        {manageOpen && (tab === 'all' || tab === 'part23') && (
           <section className="panel compact bank-editor">
             <h2>新增 Part 2 题卡</h2>
             <form className="bank-form topic-form" onSubmit={addTopic}>
@@ -955,20 +976,44 @@ function QuestionBank() {
               </button>
               {isOpen && (
                 <div className="topic-bank-detail">
-                  <label>英文题卡
-                    <input value={topic.title_en} onChange={(e) => updateTopic(cat.id, topic.id, { title_en: e.target.value })} />
-                  </label>
-                  <label>中文题名
-                    <input value={topic.title_zh || ''} onChange={(e) => updateTopic(cat.id, topic.id, { title_zh: e.target.value })} />
-                  </label>
-                  <label>Part 2 prompts
-                    <textarea value={(topic.prompts || []).join('\n')} onChange={(e) => updateTopic(cat.id, topic.id, { prompts: splitLines(e.target.value) })} />
-                  </label>
-                  <div className="followup-block">
-                    <strong>Part 3 追问</strong>
-                    <textarea value={(topic.follow_ups || []).map((item) => item.en).join('\n')} onChange={(e) => updateTopic(cat.id, topic.id, { follow_ups: splitLines(e.target.value).map((en) => ({ en, zh: '' })) })} />
-                  </div>
-                  <button className="secondary danger-text" onClick={() => deleteTopic(cat.id, topic.id)}>删除题卡</button>
+                  {manageOpen ? (
+                    <>
+                      <label>英文题卡
+                        <input value={topic.title_en} onChange={(e) => updateTopic(cat.id, topic.id, { title_en: e.target.value })} />
+                      </label>
+                      <label>中文题名
+                        <input value={topic.title_zh || ''} onChange={(e) => updateTopic(cat.id, topic.id, { title_zh: e.target.value })} />
+                      </label>
+                      <label>Part 2 prompts
+                        <textarea value={(topic.prompts || []).join('\n')} onChange={(e) => updateTopic(cat.id, topic.id, { prompts: splitLines(e.target.value) })} />
+                      </label>
+                      <div className="followup-block">
+                        <strong>Part 3 追问</strong>
+                        <textarea value={(topic.follow_ups || []).map((item) => item.en).join('\n')} onChange={(e) => updateTopic(cat.id, topic.id, { follow_ups: splitLines(e.target.value).map((en) => ({ en, zh: '' })) })} />
+                      </div>
+                      <button className="secondary danger-text" onClick={() => deleteTopic(cat.id, topic.id)}>删除题卡</button>
+                    </>
+                  ) : (
+                    <>
+                      <h3>{topic.title_en}</h3>
+                      <p>{topic.title_zh}</p>
+                      {topic.prompts?.length > 0 && (
+                        <ul className="prompt-list">
+                          {topic.prompts.map((prompt) => <li key={prompt}>{prompt}</li>)}
+                        </ul>
+                      )}
+                      <div className="followup-block">
+                        <strong>Part 3 追问</strong>
+                        {topic.follow_ups?.length > 0 ? (
+                          <ol>
+                            {topic.follow_ups.map((item) => <li key={item.en}>{item.en}</li>)}
+                          </ol>
+                        ) : (
+                          <p>该题暂无明确关联追问，练习时会从同类 P3 题池抽题。</p>
+                        )}
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
             </section>
