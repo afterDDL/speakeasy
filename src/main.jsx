@@ -268,7 +268,7 @@ function Practice({ params }) {
     }, 450);
     return () => {
       window.clearTimeout(timer);
-      window.speechSynthesis?.cancel();
+      cancelSpeechPlayback();
       setExaminerSpeaking(false);
     };
   }, [index, examStarted]);
@@ -436,6 +436,7 @@ function Practice({ params }) {
           questionVisible={questionVisible}
           onToggleQuestion={() => setQuestionVisible((value) => !value)}
           onReplayQuestion={() => {
+            setSpeechError('');
             const hooks = {
               onStart: () => {
                 setSpeechError('');
@@ -557,7 +558,7 @@ function SpeechBox({ value, onChange, lang, showTranscript = true }) {
       setError('当前浏览器不支持 SpeechRecognition，请使用下方文本输入。');
       return;
     }
-    window.speechSynthesis?.cancel();
+    cancelSpeechPlayback();
     try {
       if (navigator.mediaDevices?.getUserMedia) {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -1418,6 +1419,14 @@ function buildExamSpeechText(step, previousStep, phase, index) {
   return lines.join(' ');
 }
 
+let speechRequestId = 0;
+
+function cancelSpeechPlayback() {
+  speechRequestId += 1;
+  window.speechSynthesis?.cancel();
+  window.speechSynthesis?.resume?.();
+}
+
 function speakExamText(text, examiner, hooks = {}) {
   return speakText(text, examiner, 0.9, hooks);
 }
@@ -1433,22 +1442,46 @@ function speakText(text, examiner, rate, hooks = {}) {
     hooks.onError?.('当前浏览器不支持语音合成。请使用 Chrome / Edge 打开；如果是在应用内置浏览器或微信内置浏览器中访问，考官朗读可能不可用。');
     return false;
   }
-  window.speechSynthesis.cancel();
-  window.speechSynthesis.resume?.();
+  cancelSpeechPlayback();
+  const requestId = ++speechRequestId;
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.lang = 'en-US';
   utterance.rate = rate;
   utterance.pitch = examiner?.id === 'kenji' ? 0.92 : 1;
-  utterance.onstart = hooks.onStart || null;
-  utterance.onend = hooks.onEnd || null;
-  utterance.onerror = () => hooks.onError?.('浏览器中断了本次朗读。请点“重播题目”再试，或换用 Chrome / Edge。');
+  utterance.onstart = () => {
+    if (requestId !== speechRequestId) return;
+    hooks.onStart?.();
+  };
+  utterance.onend = () => {
+    if (requestId !== speechRequestId) return;
+    hooks.onEnd?.();
+  };
+  utterance.onerror = (event) => {
+    if (requestId !== speechRequestId) return;
+    if (event.error === 'canceled' || event.error === 'interrupted') {
+      hooks.onEnd?.();
+      return;
+    }
+    hooks.onError?.(getSpeechSynthesisErrorMessage(event.error));
+  };
   const preferred = pickEnglishVoice();
   if (preferred) utterance.voice = preferred;
   window.setTimeout(() => {
+    if (requestId !== speechRequestId) return;
     window.speechSynthesis.speak(utterance);
     window.speechSynthesis.resume?.();
   }, 80);
   return true;
+}
+
+function getSpeechSynthesisErrorMessage(error) {
+  if (error === 'audio-busy' || error === 'audio-hardware') {
+    return '浏览器暂时无法播放考官语音。请关闭其他占用音频的页面，或点“重播题目”再试。';
+  }
+  if (error === 'language-unavailable' || error === 'voice-unavailable') {
+    return '当前浏览器没有可用的英文朗读语音。请使用 Chrome / Edge，或检查系统语音设置。';
+  }
+  return '浏览器朗读服务暂时不可用。请点“重播题目”再试，或换用 Chrome / Edge。';
 }
 
 function pickEnglishVoice() {
