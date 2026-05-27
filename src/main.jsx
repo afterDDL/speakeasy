@@ -150,7 +150,13 @@ function HomePage() {
 function makePlan(mode) {
   const bank = getStoredQuestionBank(defaultQuestionBank);
   const topic = getRandomPart2TopicFromBank(bank);
-  const part1 = getPart1QuestionsFromBank(bank, mode === 'full' ? 5 : 8).map((q) => ({ type: 'part1', question: q.en, zh: q.zh }));
+  const part1 = getPart1QuestionsFromBank(bank, mode === 'full' ? 5 : 8).map((q) => ({
+    type: 'part1',
+    question: q.en,
+    zh: q.zh,
+    topicName: q.topicName,
+    topicId: q.topicId,
+  }));
   const part2 = [{ type: 'part2', question: topic.title_en, zh: topic.title_zh, prompts: topic.prompts }];
   const part3 = getPart3QuestionsFromBank(bank, topic, mode === 'full' ? 4 : 6).map((q) => ({ type: 'part3', question: q.en, zh: q.zh }));
   if (mode === 'part1') return { topic, steps: part1 };
@@ -164,7 +170,22 @@ function shuffle(items) {
 }
 
 function getPart1QuestionsFromBank(bank, limit = 8) {
-  return shuffle(bank.part1.categories.flatMap((category) => category.questions)).slice(0, limit);
+  const categories = bank.part1.categories || [];
+  const workStudy = categories.find((category) => /work\s*or\s*stud/i.test(category.name_en || ''));
+  const workStudyQuestions = (workStudy?.questions || []).map((question) => withPart1Topic(question, workStudy));
+  const requiredWorkStudy = workStudyQuestions.slice(0, Math.min(3, limit));
+  const remainingPool = categories
+    .filter((category) => category.id !== workStudy?.id)
+    .flatMap((category) => category.questions.map((question) => withPart1Topic(question, category)));
+  return [...requiredWorkStudy, ...shuffle(remainingPool).slice(0, Math.max(0, limit - requiredWorkStudy.length))];
+}
+
+function withPart1Topic(question, category) {
+  return {
+    ...question,
+    topicId: category.id,
+    topicName: category.name_en || category.name_zh || 'this topic',
+  };
 }
 
 function getRandomPart2TopicFromBank(bank) {
@@ -1358,7 +1379,10 @@ function normalizeReportScores(session) {
 function getExaminerCue(step, previousStep, phase, index, examiner) {
   if (!step) return '';
   if (step.isFollowUp) return 'I would like to ask one quick follow-up.';
-  if (index === 0) return `Good morning. My name is ${examiner?.name || 'your examiner'}. Let's begin with Part 1.`;
+  if (index === 0) return `Good morning. My name is ${examiner?.name || 'your examiner'}. First, let's talk about your work or studies.`;
+  if (step.type === 'part1' && previousStep?.type === 'part1' && previousStep.topicId !== step.topicId) {
+    return `Now let's talk about ${step.topicName || 'another topic'}.`;
+  }
   if (previousStep?.type !== step.type && step.type === 'part2') {
     return 'Now I am going to give you a topic. You have one minute to prepare.';
   }
@@ -1374,9 +1398,11 @@ function buildExamSpeechText(step, previousStep, phase, index) {
   const lines = [];
   if (index === 0) {
     lines.push('Good morning. My name is your examiner. This is your IELTS Speaking test. Can you tell me your full name, please?');
-    lines.push('Thank you. Let us begin with Part 1.');
+    lines.push('Thank you. First, let us talk about your work or studies.');
   } else if (step.isFollowUp) {
     lines.push('I would like to ask one quick follow-up.');
+  } else if (step.type === 'part1' && previousStep?.type === 'part1' && previousStep.topicId !== step.topicId) {
+    lines.push(`Now let us talk about ${step.topicName || 'another topic'}.`);
   } else if (previousStep?.type !== step.type && step.type === 'part2') {
     lines.push('Now I am going to give you a topic. You will have one minute to prepare, and then you should speak for one to two minutes. You can make notes if you wish.');
   } else if (previousStep?.type !== step.type && step.type === 'part3') {
