@@ -1086,6 +1086,30 @@ textarea {
   padding-top: 14px;
 }
 
+.faq-list {
+  display: grid;
+  gap: 10px;
+}
+
+.faq-list details {
+  border: 1px solid #e5e5ea;
+  border-radius: 12px;
+  background: #f8f8fa;
+  padding: 12px 14px;
+}
+
+.faq-list summary {
+  cursor: pointer;
+  color: #1d1d1f;
+  font-weight: 700;
+}
+
+.faq-list p {
+  margin: 10px 0 0;
+  color: #636366;
+  line-height: 1.6;
+}
+
 .developer-credit {
   margin-top: 18px;
   color: #8e8e93;

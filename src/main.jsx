@@ -1369,6 +1369,31 @@ function SettingsPage() {
           <p className="hint">关闭后，练习时不会显示实时语音转文字，但报告页仍会保存和展示转写结果。</p>
         </section>
         <section className="panel settings-panel">
+          <h2>常见问题的解决方法</h2>
+          <div className="faq-list">
+            <details open>
+              <summary>麦克风权限被拒绝怎么办？</summary>
+              <p>点击浏览器地址栏左侧的小锁或权限图标，把麦克风改为允许，然后刷新页面重试。手机上也需要检查系统设置里的浏览器麦克风权限。</p>
+            </details>
+            <details>
+              <summary>语音识别显示 network 是什么原因？</summary>
+              <p>Chrome / Edge 的网页语音识别依赖在线服务。出现 network 通常表示浏览器连不上识别服务，可以切换网络、开关代理，或换桌面 Chrome / Edge 后重试。</p>
+            </details>
+            <details>
+              <summary>手机浏览器为什么允许了麦克风还是不能转写？</summary>
+              <p>部分移动端浏览器、iPhone Safari、微信/QQ 等内置浏览器对 SpeechRecognition 支持不稳定。推荐使用 Android Chrome / Edge 或桌面 Chrome / Edge。</p>
+            </details>
+            <details>
+              <summary>考官不读题或重播没有声音怎么办？</summary>
+              <p>先点击“启用考官语音”，再点“重播题目”。如果仍然没有声音，请检查系统音量、浏览器声音权限，或换 Chrome / Edge 打开。</p>
+            </details>
+            <details>
+              <summary>语音功能失败时还能继续练习吗？</summary>
+              <p>可以。直接在回答文本框里手动输入内容，仍然可以完成练习、保存历史并生成 AI 报告。</p>
+            </details>
+          </div>
+        </section>
+        <section className="panel settings-panel">
           <div className="panel-title-row">
             <div>
               <h2>开发者设置</h2>
