@@ -233,6 +233,7 @@ function Practice({ params }) {
   const [voiceEnabled, setVoiceEnabled] = useState(false);
   const [speechSupported] = useState(Boolean(window.speechSynthesis && window.SpeechSynthesisUtterance));
   const completingRef = useRef(false);
+  const skipNextAutoReadRef = useRef(false);
   const step = flowSteps[index];
   const isLast = index === flowSteps.length - 1;
   const previousStep = flowSteps[index - 1];
@@ -250,6 +251,10 @@ function Practice({ params }) {
 
   useEffect(() => {
     if (!step || !examStarted || !voiceEnabled) return undefined;
+    if (skipNextAutoReadRef.current) {
+      skipNextAutoReadRef.current = false;
+      return undefined;
+    }
     const timer = window.setTimeout(() => {
       speakCurrentQuestion();
     }, 450);
@@ -357,9 +362,10 @@ function Practice({ params }) {
       setSpeechError('当前浏览器不支持语音合成。请使用 Chrome / Edge 打开；如果是在应用内置浏览器或微信内置浏览器中访问，考官朗读可能不可用。');
       return;
     }
+    skipNextAutoReadRef.current = !voiceEnabled;
     setVoiceEnabled(true);
     setSpeechError('');
-    window.setTimeout(() => speakCurrentQuestion(), 60);
+    speakCurrentQuestion();
   }
 
   function saveAndMove({ auto = false } = {}) {
@@ -462,8 +468,9 @@ function Practice({ params }) {
             cancelSpeechPlayback();
             setExaminerSpeaking(false);
             setSpeechError('');
+            skipNextAutoReadRef.current = !voiceEnabled;
             setVoiceEnabled(true);
-            window.setTimeout(() => speakCurrentQuestion(), 60);
+            speakCurrentQuestion();
           }}
           onSkipPrep={() => setPhase('answer')}
         />
@@ -598,7 +605,11 @@ function SpeechBox({ value, onChange, lang, showTranscript = true, onBeforeStart
       setError('当前浏览器不支持 SpeechRecognition，请使用下方文本输入。');
       return;
     }
-    cancelSpeechPlayback();
+    if (onBeforeStart) {
+      onBeforeStart();
+    } else {
+      cancelSpeechPlayback();
+    }
     try {
       if (navigator.mediaDevices?.getUserMedia) {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -1463,7 +1474,7 @@ let speechRequestId = 0;
 
 function cancelSpeechPlayback() {
   speechRequestId += 1;
-    onBeforeStart?.();
+  window.speechSynthesis?.cancel?.();
   window.speechSynthesis?.resume?.();
 }
 
