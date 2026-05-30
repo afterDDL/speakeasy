@@ -803,17 +803,33 @@ textarea {
   margin-top: 10px;
   border-top: 1px dashed #d2d2d7;
   padding-top: 10px;
+  display: grid;
+  gap: 10px;
 }
 
-.question-feedback span {
+.feedback-block {
+  display: grid;
+  gap: 4px;
+}
+
+.feedback-block span {
   display: block;
-  color: #1d1d1f;
+  color: #007aff;
   font-weight: 650;
-  font-size: 14px;
+  font-size: 12px;
 }
 
-.question-feedback p {
-  margin: 6px 0 0;
+.feedback-block p {
+  margin: 0;
+  color: #3a3a3c;
+  line-height: 1.6;
+}
+
+.sample-upgrade {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #ffffff;
+  border: 1px solid #e5e5ea;
 }
 
 .phrase-row {

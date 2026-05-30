@@ -860,8 +860,32 @@ function QuestionFeedback({ feedback }) {
   if (!feedback) return null;
   return (
     <div className="question-feedback">
-      <span>{feedback.issue}</span>
-      <p>{feedback.suggestion}</p>
+      <div className="feedback-block">
+        <span>问题所在</span>
+        <p>{feedback.issue}</p>
+      </div>
+      <div className="feedback-block">
+        <span>改进建议</span>
+        <p>{feedback.suggestion}</p>
+      </div>
+      {feedback.answerFramework && (
+        <div className="feedback-block">
+          <span>答题结构</span>
+          <p>{feedback.answerFramework}</p>
+        </div>
+      )}
+      {feedback.contentGap && (
+        <div className="feedback-block">
+          <span>内容缺口</span>
+          <p>{feedback.contentGap}</p>
+        </div>
+      )}
+      {feedback.sampleUpgrade && (
+        <div className="feedback-block">
+          <span>示例升级</span>
+          <p className="sample-upgrade">{feedback.sampleUpgrade}</p>
+        </div>
+      )}
       {feedback.usefulPhrases?.length > 0 && (
         <div className="phrase-row">
           {feedback.usefulPhrases.map((phrase) => <code key={phrase}>{phrase}</code>)}

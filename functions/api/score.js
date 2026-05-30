@@ -54,9 +54,22 @@ function validateSession(session) {
 }
 
 function buildScoringContent(session) {
-  return session.responses.map((item, index) => (
-    `Q${index + 1} (${item.part}): ${item.question}\nCandidate answer: ${item.answer || '(empty)'}`
-  )).join('\n\n');
+  const sessionContext = [
+    `Mode: ${session.mode?.label || session.mode?.id || 'practice'}`,
+    `Topic: ${session.topic?.title_en || session.topic?.title_zh || 'N/A'}`,
+    `Examiner: ${session.examiner?.name || 'N/A'}`,
+  ].join('\n');
+  const questions = session.responses.map((item, index) => ([
+    `Q${index + 1}`,
+    `Part: ${item.part}`,
+    `Question: ${item.question}`,
+    `Chinese note: ${item.zh || 'N/A'}`,
+    `Cue card prompts: ${item.prompts?.length ? item.prompts.join(' | ') : 'N/A'}`,
+    `Is follow-up: ${item.isFollowUp ? 'yes' : 'no'}`,
+    `Answer duration seconds: ${item.durationSeconds ?? 'N/A'}`,
+    `Candidate answer: ${item.answer || '(empty)'}`,
+  ].join('\n'))).join('\n\n');
+  return `${sessionContext}\n\n${questions}`;
 }
 
 function buildScoringMessages(content) {
@@ -80,9 +93,21 @@ function buildScoringMessages(content) {
         '  "strengths": string[],',
         '  "weaknesses": string[],',
         '  "nextGoal": string,',
-        '  "questionFeedback": [{"question": string, "issue": string, "suggestion": string, "usefulPhrases": string[]}]',
+        '  "questionFeedback": [{',
+        '    "question": string,',
+        '    "issue": string,',
+        '    "suggestion": string,',
+        '    "answerFramework": string,',
+        '    "contentGap": string,',
+        '    "sampleUpgrade": string,',
+        '    "usefulPhrases": string[]',
+        '  }]',
         '}',
         'Scores are IELTS band scores from 0 to 9. Keep Chinese comments concise and practical.',
+        'For questionFeedback, avoid generic repeated advice. Each item must be based on that exact question and candidate answer.',
+        'For Part 1, give a 2-3 sentence answer structure. For Part 2, use the cue card prompts as the structure. For Part 3, give an opinion-reason-example/contrast structure.',
+        'contentGap must say what this answer missed for this specific question. sampleUpgrade must be one improved answer fragment in natural English, not a full memorized essay.',
+        'usefulPhrases must be topic-specific and should not repeat the same phrases across all questions unless genuinely relevant.',
       ].join('\n'),
     },
     { role: 'user', content },

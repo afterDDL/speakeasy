@@ -113,9 +113,22 @@ async function safeJson(response) {
 }
 
 function buildScoringContent(session) {
-  return session.responses.map((item, index) => (
-    `Q${index + 1} (${item.part}): ${item.question}\nCandidate answer: ${item.answer || '(empty)'}`
-  )).join('\n\n');
+  const sessionContext = [
+    `Mode: ${session.mode?.label || session.mode?.id || 'practice'}`,
+    `Topic: ${session.topic?.title_en || session.topic?.title_zh || 'N/A'}`,
+    `Examiner: ${session.examiner?.name || 'N/A'}`,
+  ].join('\n');
+  const questions = session.responses.map((item, index) => ([
+    `Q${index + 1}`,
+    `Part: ${item.part}`,
+    `Question: ${item.question}`,
+    `Chinese note: ${item.zh || 'N/A'}`,
+    `Cue card prompts: ${item.prompts?.length ? item.prompts.join(' | ') : 'N/A'}`,
+    `Is follow-up: ${item.isFollowUp ? 'yes' : 'no'}`,
+    `Answer duration seconds: ${item.durationSeconds ?? 'N/A'}`,
+    `Candidate answer: ${item.answer || '(empty)'}`,
+  ].join('\n'))).join('\n\n');
+  return `${sessionContext}\n\n${questions}`;
 }
 
 function buildScoringMessages(content) {
@@ -139,9 +152,21 @@ function buildScoringMessages(content) {
         '  "strengths": string[],',
         '  "weaknesses": string[],',
         '  "nextGoal": string,',
-        '  "questionFeedback": [{"question": string, "issue": string, "suggestion": string, "usefulPhrases": string[]}]',
+        '  "questionFeedback": [{',
+        '    "question": string,',
+        '    "issue": string,',
+        '    "suggestion": string,',
+        '    "answerFramework": string,',
+        '    "contentGap": string,',
+        '    "sampleUpgrade": string,',
+        '    "usefulPhrases": string[]',
+        '  }]',
         '}',
         'Scores are IELTS band scores from 0 to 9. Keep Chinese comments concise and practical.',
+        'For questionFeedback, avoid generic repeated advice. Each item must be based on that exact question and candidate answer.',
+        'For Part 1, give a 2-3 sentence answer structure. For Part 2, use the cue card prompts as the structure. For Part 3, give an opinion-reason-example/contrast structure.',
+        'contentGap must say what this answer missed for this specific question. sampleUpgrade must be one improved answer fragment in natural English, not a full memorized essay.',
+        'usefulPhrases must be topic-specific and should not repeat the same phrases across all questions unless genuinely relevant.',
       ].join('\n'),
     },
     { role: 'user', content },
@@ -172,34 +197,81 @@ export function normalizeScores(scores) {
       grammar: { score: grammar, comment: criteria.grammar?.comment || '注意句子结构和时态准确性。' },
       pronunciation: { score: pronunciation, comment: criteria.pronunciation?.comment || '当前发音分为参考估算。' },
     },
-    questionFeedback: Array.isArray(scores.questionFeedback) ? scores.questionFeedback : [],
+    questionFeedback: Array.isArray(scores.questionFeedback) ? scores.questionFeedback.map(normalizeQuestionFeedback) : [],
+  };
+}
+
+function normalizeQuestionFeedback(feedback) {
+  return {
+    question: feedback?.question || '',
+    issue: feedback?.issue || '这一题需要更贴合题目展开。',
+    suggestion: feedback?.suggestion || '下次回答时先直接回应题目，再补充原因和具体例子。',
+    answerFramework: feedback?.answerFramework || feedback?.framework || '',
+    contentGap: feedback?.contentGap || '',
+    sampleUpgrade: feedback?.sampleUpgrade || feedback?.example || '',
+    usefulPhrases: ensureList(feedback?.usefulPhrases),
   };
 }
 
 function buildQuestionFeedback(item, index) {
   const answer = item.answer?.trim() || '';
   const wordCount = answer ? answer.split(/\s+/).length : 0;
+  const framework = getAnswerFramework(item);
   return {
     question: item.question,
     issue: wordCount === 0
       ? '这一题还没有有效回答记录。'
       : wordCount < 25
-        ? '回答偏短，缺少原因或例子。'
-        : '回答有基本内容，可以继续提升表达精确度。',
+        ? '回答偏短，缺少针对这道题的原因、细节或例子。'
+        : '回答已有基本内容，但还可以更贴合题目关键词展开。',
     suggestion: wordCount < 25
-      ? '尝试用“I think..., because..., for example...”把答案扩展成三句。'
-      : '尝试加入一个具体经历或对比，让答案更自然。',
-    usefulPhrases: getUsefulPhrases(item.part, index),
+      ? `可以按“${framework}”重答一遍，先保证内容完整。`
+      : `保留原观点，再按“${framework}”补一个更具体的细节。`,
+    answerFramework: framework,
+    contentGap: getContentGap(item, wordCount),
+    sampleUpgrade: getSampleUpgrade(item, index),
+    usefulPhrases: getUsefulPhrases(item, index),
   };
 }
 
-function getUsefulPhrases(part, index) {
-  const banks = {
-    part1: ['I would say...', 'The main reason is that...', 'For example...'],
-    part2: ['I would like to talk about...', 'What impressed me most was...', 'Looking back, I felt...'],
-    part3: ['From a broader perspective...', 'It depends on the situation.', 'Compared with the past...'],
-  };
-  return banks[part] || banks.part1;
+function getAnswerFramework(item) {
+  if (item.part === 'part2') {
+    const prompts = item.prompts?.length ? item.prompts.slice(0, 4).join(' → ') : '背景 → 经过 → 感受 → 原因';
+    return `按题卡顺序展开：${prompts}`;
+  }
+  if (item.part === 'part3') return '观点 → 原因 → 例子/对比 → 回扣问题';
+  return '直接回答 → 简短原因 → 一个个人例子';
+}
+
+function getContentGap(item, wordCount) {
+  if (!wordCount) return '需要先完成一段可评估的回答。';
+  if (item.part === 'part2') return item.prompts?.length
+    ? `注意覆盖题卡里的关键点：${item.prompts.join('、')}。`
+    : '需要补充更完整的时间、地点、人物和感受。';
+  if (item.part === 'part3') return '需要从个人经历上升到社会/群体层面的讨论，并加入对比或例子。';
+  return '需要补充一个具体原因或个人经历，避免只给一句结论。';
+}
+
+function getSampleUpgrade(item, index) {
+  if (item.part === 'part2') return 'One detail I would add is a specific moment that shows why this person, place, or experience mattered to me.';
+  if (item.part === 'part3') return 'In the long run, this depends on people’s age, lifestyle, and the choices they have in daily life.';
+  return index % 2 === 0
+    ? 'For me, the biggest reason is that it fits naturally into my daily routine.'
+    : 'A small example is that I often notice this when I am studying or talking with friends.';
+}
+
+function getUsefulPhrases(item, index) {
+  const question = `${item.question} ${item.zh || ''}`.toLowerCase();
+  if (item.part === 'part2') {
+    return ['The thing I remember most is...', 'What made it special was...', 'By the end of it, I felt...'];
+  }
+  if (item.part === 'part3') {
+    if (/people|society|children|young|old/.test(question)) return ['From a social perspective...', 'This varies from person to person.', 'One possible reason is...'];
+    return ['It depends on the context.', 'Compared with the past...', 'A practical example would be...'];
+  }
+  if (/like|enjoy|prefer/.test(question)) return ['I’m quite into...', 'What I like about it is...', 'It helps me...'];
+  if (/often|usually|how much|how long/.test(question)) return ['I’d say quite often...', 'It depends on my schedule.', 'Usually, I do this when...'];
+  return ['In my case...', 'The main reason is...', 'For example, recently...'];
 }
 
 function getSummary(overall) {
