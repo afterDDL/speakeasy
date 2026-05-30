@@ -799,6 +799,19 @@ textarea {
   padding: 14px;
 }
 
+.qa-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.qa-title-row div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
 .question-feedback {
   margin-top: 10px;
   border-top: 1px dashed #d2d2d7;

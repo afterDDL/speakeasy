@@ -172,6 +172,19 @@ function makePlan(mode, params = new URLSearchParams()) {
 
 function makeSingleQuestionPlan(bank, params) {
   const part = params.get('part');
+  const directQuestion = params.get('questionText');
+  if (directQuestion) {
+    const directStep = {
+      type: ['part1', 'part2', 'part3'].includes(part) ? part : 'part1',
+      question: directQuestion,
+      zh: params.get('zh') || '',
+      prompts: splitEncodedList(params.get('prompts')),
+    };
+    return {
+      topic: { id: 'retry-topic', title_en: directStep.question, title_zh: directStep.zh },
+      steps: [directStep],
+    };
+  }
   if (part === 'part1') {
     const category = bank.part1.categories.find((cat) => cat.id === params.get('category'));
     const question = category?.questions[Number(params.get('question'))];
@@ -202,6 +215,10 @@ function makeSingleQuestionPlan(bank, params) {
     topic: null,
     steps: [{ type: 'part1', question: fallback?.en || 'Do you like your hometown?', zh: fallback?.zh || '' }],
   };
+}
+
+function splitEncodedList(value) {
+  return value ? value.split('||').map((item) => item.trim()).filter(Boolean) : [];
 }
 
 function shuffle(items) {
@@ -767,6 +784,18 @@ function Report({ id }) {
     }
   }
 
+  function retryQuestion(item) {
+    const search = new URLSearchParams({
+      examiner: session.examiner?.id || examiners[1].id,
+      mode: 'single',
+      part: item.part || 'part1',
+      questionText: item.question || '',
+      zh: item.zh || '',
+    });
+    if (item.prompts?.length) search.set('prompts', item.prompts.join('||'));
+    navigate(`/practice?${search.toString()}`);
+  }
+
   return (
     <Shell title="练习报告" back="/" actions={<button className="icon-link" onClick={() => navigate(`/share?id=${session.id}`)}><Share2 size={20} /></button>}>
       <main className="page">
@@ -834,8 +863,16 @@ function Report({ id }) {
           <div className="qa-list">
             {session.responses.map((item, idx) => (
               <article key={item.id}>
-                <strong>Question {idx + 1}: {item.question}</strong>
-                <small>{item.zh}</small>
+                <div className="qa-title-row">
+                  <div>
+                    <strong>Question {idx + 1}: {item.question}</strong>
+                    <small>{item.zh}</small>
+                  </div>
+                  <button className="ghost-button mini" onClick={() => retryQuestion(item)}>
+                    <Play size={14} />
+                    重答此题
+                  </button>
+                </div>
                 <p>{item.answer || '未记录回答'}</p>
                 <QuestionFeedback feedback={scores.questionFeedback[idx]} />
               </article>
