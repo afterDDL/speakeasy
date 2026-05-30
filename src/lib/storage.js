@@ -1,6 +1,7 @@
 const SETTINGS_KEY = 'speakeasy_settings_v1';
 const SESSIONS_KEY = 'speakeasy_sessions_v1';
 const QUESTION_BANK_KEY = 'speakeasy_question_bank_v1';
+const RECENT_PART1_KEY = 'speakeasy_recent_part1_v1';
 
 export const defaultSettings = {
   part2PrepSeconds: 60,
@@ -67,4 +68,19 @@ export function saveQuestionBank(bank) {
 
 export function resetQuestionBank() {
   localStorage.removeItem(QUESTION_BANK_KEY);
+}
+
+export function getRecentPart1Questions() {
+  try {
+    return JSON.parse(localStorage.getItem(RECENT_PART1_KEY) || '[]');
+  } catch {
+    return [];
+  }
+}
+
+export function rememberPart1Questions(questions, limit = 40) {
+  const ids = questions.map((question) => question.sourceId || question.id || question.question || question.en).filter(Boolean);
+  if (!ids.length) return;
+  const recent = getRecentPart1Questions().filter((id) => !ids.includes(id));
+  localStorage.setItem(RECENT_PART1_KEY, JSON.stringify([...ids, ...recent].slice(0, limit)));
 }

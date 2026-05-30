@@ -26,7 +26,9 @@ import {
   getSettings,
   getSession,
   getSessions,
+  getRecentPart1Questions,
   getStoredQuestionBank,
+  rememberPart1Questions,
   saveSession,
   saveQuestionBank,
   saveSettings,
@@ -155,12 +157,19 @@ function makePlan(mode, params = new URLSearchParams()) {
   const bank = getStoredQuestionBank(defaultQuestionBank);
   if (mode === 'single') return makeSingleQuestionPlan(bank, params);
   const topic = getRandomPart2TopicFromBank(bank);
-  const part1 = getPart1QuestionsFromBank(bank, mode === 'full' ? 5 : 8).map((q) => ({
+  const recentPart1 = getRecentPart1Questions();
+  const part1Source = getPart1QuestionsFromBank(bank, {
+    limit: mode === 'full' ? 5 : 8,
+    mode,
+    recentIds: recentPart1,
+  });
+  const part1 = part1Source.map((q) => ({
     type: 'part1',
     question: q.en,
     zh: q.zh,
     topicName: q.topicName,
     topicId: q.topicId,
+    sourceId: q.id,
   }));
   const part2 = [{ type: 'part2', question: topic.title_en, zh: topic.title_zh, prompts: topic.prompts }];
   const part3 = getPart3QuestionsFromBank(bank, topic, mode === 'full' ? 4 : 6).map((q) => ({ type: 'part3', question: q.en, zh: q.zh }));
@@ -225,20 +234,69 @@ function shuffle(items) {
   return [...items].sort(() => Math.random() - 0.5);
 }
 
-function getPart1QuestionsFromBank(bank, limit = 8) {
+function getPart1QuestionsFromBank(bank, options = {}) {
+  const limit = typeof options === 'number' ? options : options.limit || 8;
+  const mode = typeof options === 'object' ? options.mode : 'part1';
+  const recentIds = new Set(typeof options === 'object' ? options.recentIds || [] : []);
   const categories = bank.part1.categories || [];
   const workStudy = categories.find((category) => /work\s*or\s*stud/i.test(category.name_en || ''));
-  const workStudyQuestions = (workStudy?.questions || []).map((question) => withPart1Topic(question, workStudy));
-  const requiredWorkStudy = workStudyQuestions.slice(0, Math.min(3, limit));
-  const remainingPool = categories
-    .filter((category) => category.id !== workStudy?.id)
-    .flatMap((category) => category.questions.map((question) => withPart1Topic(question, category)));
-  return [...requiredWorkStudy, ...shuffle(remainingPool).slice(0, Math.max(0, limit - requiredWorkStudy.length))];
+  const used = new Set();
+  const selected = [];
+
+  if (mode === 'full' && workStudy) {
+    const workStudyQuestions = prioritizeFreshQuestions(
+      workStudy.questions.map((question, index) => withPart1Topic(question, workStudy, index)),
+      recentIds,
+    );
+    for (const question of workStudyQuestions.slice(0, Math.min(3, limit))) {
+      selected.push(question);
+      used.add(question.id);
+    }
+  }
+
+  const poolByCategory = categories
+    .map((category) => ({
+      category,
+      questions: prioritizeFreshQuestions(
+        category.questions.map((question, index) => withPart1Topic(question, category, index)),
+        recentIds,
+      ).filter((question) => !used.has(question.id)),
+    }))
+    .filter((item) => item.questions.length);
+
+  fillPart1RoundRobin(selected, poolByCategory, used, limit);
+  if (selected.length < limit) {
+    const fallback = categories
+      .flatMap((category) => category.questions.map((question, index) => withPart1Topic(question, category, index)))
+      .filter((question) => !used.has(question.id));
+    selected.push(...shuffle(fallback).slice(0, limit - selected.length));
+  }
+  return selected.slice(0, limit);
 }
 
-function withPart1Topic(question, category) {
+function prioritizeFreshQuestions(questions, recentIds) {
+  const fresh = questions.filter((question) => !recentIds.has(question.id));
+  const recent = questions.filter((question) => recentIds.has(question.id));
+  return [...shuffle(fresh), ...shuffle(recent)];
+}
+
+function fillPart1RoundRobin(selected, poolByCategory, used, limit) {
+  const pools = shuffle(poolByCategory).map((item) => ({ ...item, questions: [...item.questions] }));
+  while (selected.length < limit && pools.some((item) => item.questions.length)) {
+    for (const pool of pools) {
+      if (selected.length >= limit) break;
+      const question = pool.questions.shift();
+      if (!question || used.has(question.id)) continue;
+      selected.push(question);
+      used.add(question.id);
+    }
+  }
+}
+
+function withPart1Topic(question, category, index = 0) {
   return {
     ...question,
+    id: `part1:${category.id}:${index}:${question.en}`,
     topicId: category.id,
     topicName: category.name_en || category.name_zh || 'this topic',
   };
@@ -296,6 +354,7 @@ function Practice({ params }) {
   const [speechSupported] = useState(Boolean(window.speechSynthesis && window.SpeechSynthesisUtterance));
   const completingRef = useRef(false);
   const skipNextAutoReadRef = useRef(false);
+  const rememberedPart1Ref = useRef(false);
   const step = flowSteps[index];
   const isLast = index === flowSteps.length - 1;
   const previousStep = flowSteps[index - 1];
@@ -310,6 +369,12 @@ function Practice({ params }) {
     setPrepLeft(settings.part2PrepSeconds);
     setAnswerLeft(getAnswerSeconds(step, settings, isFullExam));
   }, [index, flowSteps.length]);
+
+  useEffect(() => {
+    if (rememberedPart1Ref.current) return;
+    rememberedPart1Ref.current = true;
+    rememberPart1Questions(plan.steps.filter((item) => item.type === 'part1'));
+  }, [plan]);
 
   useEffect(() => {
     if (!step || !examStarted || !voiceEnabled) return undefined;
