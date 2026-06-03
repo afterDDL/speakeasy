@@ -17,6 +17,7 @@ Recommended browsers: Chrome or Edge. Speech recognition depends on browser supp
 - Browser `SpeechRecognition` for real-time transcription, with manual text editing fallback
 - Examiner avatar selection with lightweight speaking animation
 - Practice history saved locally
+- Favorites page for collecting questions, cue cards, AI feedback templates, and retry targets
 - Structured report with IELTS-style dimensions: fluency, lexical resource, grammar, and pronunciation
 - Canvas-based report image download
 - DeepSeek scoring through a backend proxy so the API key is not exposed in the browser

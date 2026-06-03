@@ -16,6 +16,7 @@ import {
   Settings,
   Share2,
   Sparkles,
+  Star,
   Trash2,
   Volume2,
 } from 'lucide-react';
@@ -26,9 +27,13 @@ import {
   getSettings,
   getSession,
   getSessions,
+  getFavorites,
   getRecentPart1Questions,
   getStoredQuestionBank,
+  isFavoriteKey,
   rememberPart1Questions,
+  removeFavorite,
+  saveFavorite,
   saveSession,
   saveQuestionBank,
   saveSettings,
@@ -74,6 +79,7 @@ function App() {
   if (path === '/practice') return <Practice key={`${params.get('examiner') || ''}-${params.get('mode') || ''}`} params={params} />;
   if (path === '/report') return <Report id={params.get('id')} />;
   if (path === '/history') return <HistoryPage />;
+  if (path === '/favorites') return <FavoritesPage />;
   if (path === '/questions') return <QuestionBank />;
   if (path === '/settings') return <SettingsPage />;
   if (path === '/share') return <SharePage id={params.get('id')} />;
@@ -104,6 +110,7 @@ function HomePage() {
       actions={
         <>
           <button className="icon-link" onClick={() => navigate('/questions')} aria-label="题库"><BookOpen size={20} /></button>
+          <button className="icon-link" onClick={() => navigate('/favorites')} aria-label="收藏"><Star size={20} /></button>
           <button className="icon-link" onClick={() => navigate('/history')} aria-label="历史"><History size={20} /></button>
           <button className="icon-link" onClick={() => navigate('/settings')} aria-label="设置"><Settings size={20} /></button>
         </>
@@ -359,6 +366,14 @@ function Practice({ params }) {
   const isLast = index === flowSteps.length - 1;
   const previousStep = flowSteps[index - 1];
   const examinerCue = isFullExam && examStarted ? getExaminerCue(step, previousStep, phase, index, examiner) : '';
+  const currentFavoriteItem = step ? {
+    part: step.type,
+    question: step.question,
+    zh: step.zh,
+    prompts: step.prompts || [],
+    source: 'practice',
+    topicName: step.topicName || plan.topic?.title_en || '',
+  } : null;
 
   useEffect(() => {
     if (!step) return;
@@ -600,6 +615,7 @@ function Practice({ params }) {
             speakCurrentQuestion();
           }}
           onSkipPrep={() => setPhase('answer')}
+          favoriteItem={currentFavoriteItem}
         />
 
         {phase === 'answer' && (
@@ -630,7 +646,7 @@ function Practice({ params }) {
   );
 }
 
-function QuestionCard({ step, phase, prepLeft, examinerCue, speechError, strictExam, questionVisible, onToggleQuestion, onReplayQuestion, onSkipPrep }) {
+function QuestionCard({ step, phase, prepLeft, examinerCue, speechError, strictExam, questionVisible, onToggleQuestion, onReplayQuestion, onSkipPrep, favoriteItem }) {
   const canHideQuestion = step.type === 'part1' || step.type === 'part3';
   return (
     <section className={`question-card ${canHideQuestion && !questionVisible ? 'question-card-hidden' : ''}`}>
@@ -638,24 +654,19 @@ function QuestionCard({ step, phase, prepLeft, examinerCue, speechError, strictE
       {speechError && <div className="inline-warning"><strong>考官朗读不可用</strong><span>{speechError}</span></div>}
       <div className="question-card-head">
         <span className="pill">{partLabel(step.type)}</span>
-        {canHideQuestion && (
-          <div className="question-actions">
-            <button className="ghost-button" onClick={onReplayQuestion}>
-              <Volume2 size={16} />
-              重播题目
-            </button>
-            <button className="ghost-button" onClick={onToggleQuestion}>
-              {questionVisible ? <EyeOff size={16} /> : <Eye size={16} />}
-              {questionVisible ? '隐藏题目' : '显示题目'}
-            </button>
-          </div>
-        )}
-        {!canHideQuestion && (
+        <div className="question-actions">
           <button className="ghost-button" onClick={onReplayQuestion}>
             <Volume2 size={16} />
             重播题目
           </button>
-        )}
+          {canHideQuestion && (
+            <button className="ghost-button" onClick={onToggleQuestion}>
+              {questionVisible ? <EyeOff size={16} /> : <Eye size={16} />}
+              {questionVisible ? '隐藏题目' : '显示题目'}
+            </button>
+          )}
+          <FavoriteButton item={favoriteItem} label="" />
+        </div>
       </div>
       {(!canHideQuestion || questionVisible) ? (
         <div className="question-content">
@@ -933,10 +944,23 @@ function Report({ id }) {
                     <strong>Question {idx + 1}: {item.question}</strong>
                     <small>{item.zh}</small>
                   </div>
-                  <button className="ghost-button mini" onClick={() => retryQuestion(item)}>
-                    <Play size={14} />
-                    重答此题
-                  </button>
+                  <div className="qa-row-actions">
+                    <FavoriteButton
+                      item={{
+                        part: item.part,
+                        question: item.question,
+                        zh: item.zh,
+                        prompts: item.prompts || [],
+                        source: 'report',
+                        feedback: scores.questionFeedback[idx] || null,
+                      }}
+                      label=""
+                    />
+                    <button className="ghost-button mini" onClick={() => retryQuestion(item)}>
+                      <Play size={14} />
+                      重答此题
+                    </button>
+                  </div>
                 </div>
                 <p>{item.answer || '未记录回答'}</p>
                 <QuestionFeedback feedback={scores.questionFeedback[idx]} />
@@ -1020,6 +1044,154 @@ function HistoryPage() {
       </main>
     </Shell>
   );
+}
+
+function FavoritesPage() {
+  const [favorites, setFavorites] = useState(getFavorites());
+  const [filter, setFilter] = useState('all');
+
+  useEffect(() => {
+    const refresh = () => setFavorites(getFavorites());
+    window.addEventListener('speakeasy:favorites', refresh);
+    return () => window.removeEventListener('speakeasy:favorites', refresh);
+  }, []);
+
+  const filtered = favorites.filter((item) => filter === 'all' || item.part === filter);
+
+  function deleteFavorite(key) {
+    removeFavorite(key);
+    setFavorites(getFavorites());
+  }
+
+  return (
+    <Shell title="收藏夹" back="/">
+      <main className="page">
+        <section className="panel compact">
+          <div className="panel-title-row">
+            <div>
+              <h2>我的收藏</h2>
+              <p>保存值得复练的题目、题卡和 AI 反馈模板，之后可以直接进入单题练习。</p>
+            </div>
+            <span className="pill">{favorites.length} 条</span>
+          </div>
+        </section>
+        <div className="tabs">
+          {['all', 'part1', 'part2', 'part3'].map((item) => (
+            <button key={item} className={filter === item ? 'active' : ''} onClick={() => setFilter(item)}>
+              {item === 'all' ? '全部' : partLabel(item)}
+            </button>
+          ))}
+        </div>
+        {filtered.length === 0 ? (
+          <div className="empty">暂无收藏。可以在题库、练习页或报告页点击星标收藏。</div>
+        ) : (
+          <div className="favorite-list">
+            {filtered.map((item) => (
+              <article className="favorite-card" key={item.key}>
+                <div className="favorite-card-head">
+                  <span className="pill">{partLabel(item.part)}</span>
+                  <small>{getFavoriteSourceLabel(item.source)} · {formatDate(item.createdAt)}</small>
+                </div>
+                <h2>{item.question}</h2>
+                {item.zh && <p>{item.zh}</p>}
+                {item.prompts?.length > 0 && (
+                  <ul className="prompt-list">
+                    {item.prompts.map((prompt) => <li key={prompt}>{prompt}</li>)}
+                  </ul>
+                )}
+                {item.feedback && (
+                  <div className="favorite-feedback">
+                    {item.feedback.answerFramework && <p><strong>答题结构：</strong>{item.feedback.answerFramework}</p>}
+                    {item.feedback.contentGap && <p><strong>内容缺口：</strong>{item.feedback.contentGap}</p>}
+                    {item.feedback.sampleUpgrade && <p><strong>示例升级：</strong>{item.feedback.sampleUpgrade}</p>}
+                    {item.feedback.usefulPhrases?.length > 0 && (
+                      <div className="phrase-row">
+                        {item.feedback.usefulPhrases.map((phrase) => <code key={phrase}>{phrase}</code>)}
+                      </div>
+                    )}
+                  </div>
+                )}
+                <div className="favorite-card-actions">
+                  <button className="primary compact-button" onClick={() => startPracticeFromFavorite(item)}>
+                    <Play size={16} />
+                    练这题
+                  </button>
+                  <button className="ghost-button danger" onClick={() => deleteFavorite(item.key)}>
+                    <Trash2 size={15} />
+                    删除
+                  </button>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+      </main>
+    </Shell>
+  );
+}
+
+function FavoriteButton({ item, label = '收藏', compact = true }) {
+  const key = item?.key || buildFavoritePayload(item || {}).key;
+  const [active, setActive] = useState(() => Boolean(key && isFavoriteKey(key)));
+
+  useEffect(() => {
+    const refresh = () => setActive(Boolean(key && isFavoriteKey(key)));
+    window.addEventListener('speakeasy:favorites', refresh);
+    return () => window.removeEventListener('speakeasy:favorites', refresh);
+  }, [key]);
+
+  if (!item?.question) return null;
+
+  function toggle(event) {
+    event.stopPropagation();
+    if (active) {
+      removeFavorite(key);
+    } else {
+      saveFavorite(buildFavoritePayload(item));
+    }
+    setActive(!active);
+  }
+
+  return (
+    <button className={`favorite-button ${active ? 'active' : ''} ${compact ? 'mini' : ''}`} onClick={toggle} title={active ? '取消收藏' : '收藏'}>
+      <Star size={compact ? 15 : 17} fill={active ? 'currentColor' : 'none'} />
+      {label && <span>{active ? '已收藏' : label}</span>}
+    </button>
+  );
+}
+
+function buildFavoritePayload(item) {
+  const payload = {
+    part: item.part || 'part1',
+    question: item.question || '',
+    zh: item.zh || '',
+    prompts: item.prompts || [],
+    source: item.source || 'practice',
+    topicName: item.topicName || '',
+    feedback: item.feedback || null,
+  };
+  return {
+    ...payload,
+    key: `${payload.part}:${payload.question}:${payload.prompts.join('|')}`,
+  };
+}
+
+function startPracticeFromFavorite(item) {
+  const search = new URLSearchParams({
+    examiner: examiners[1].id,
+    mode: 'single',
+    part: item.part || 'part1',
+    questionText: item.question || '',
+    zh: item.zh || '',
+  });
+  if (item.prompts?.length) search.set('prompts', item.prompts.join('||'));
+  navigate(`/practice?${search.toString()}`);
+}
+
+function getFavoriteSourceLabel(source) {
+  if (source === 'question_bank') return '题库';
+  if (source === 'report') return '报告';
+  return '练习';
 }
 
 function QuestionBank() {
@@ -1232,13 +1404,26 @@ function QuestionBank() {
                 {cat.questions.map((q) => (
                   <li key={`${cat.id}-${q.originalIndex}`}>
                     <span>{q.en}</span>
-                    <button
-                      className="ghost-button mini"
-                      onClick={() => startSinglePractice({ part: 'part1', category: cat.id, question: String(q.originalIndex) })}
-                    >
-                      <Play size={14} />
-                      单题练习
-                    </button>
+                    <div className="bank-row-actions">
+                      <FavoriteButton
+                        item={{
+                          part: 'part1',
+                          question: q.en,
+                          zh: q.zh || '',
+                          prompts: [],
+                          source: 'question_bank',
+                          topicName: cat.name_en || cat.name_zh,
+                        }}
+                        label=""
+                      />
+                      <button
+                        className="ghost-button mini"
+                        onClick={() => startSinglePractice({ part: 'part1', category: cat.id, question: String(q.originalIndex) })}
+                      >
+                        <Play size={14} />
+                        单题练习
+                      </button>
+                    </div>
                   </li>
                 ))}
               </ul>
@@ -1296,6 +1481,16 @@ function QuestionBank() {
                   ) : (
                     <>
                       <div className="topic-detail-actions">
+                        <FavoriteButton
+                          item={{
+                            part: 'part2',
+                            question: topic.title_en,
+                            zh: topic.title_zh || '',
+                            prompts: topic.prompts || [],
+                            source: 'question_bank',
+                            topicName: cat.name_zh || cat.name_en,
+                          }}
+                        />
                         <button className="primary compact-button" onClick={() => startSinglePractice({ part: 'part2', topic: topic.id })}>
                           <Play size={16} />
                           练这张题卡
@@ -1315,13 +1510,26 @@ function QuestionBank() {
                             {topic.follow_ups.map((item, followUpIndex) => (
                               <li key={`${item.en}-${followUpIndex}`}>
                                 <span>{item.en}</span>
-                                <button
-                                  className="ghost-button mini"
-                                  onClick={() => startSinglePractice({ part: 'part3', topic: topic.id, question: String(followUpIndex) })}
-                                >
-                                  <Play size={14} />
-                                  练这题
-                                </button>
+                                <div className="bank-row-actions">
+                                  <FavoriteButton
+                                    item={{
+                                      part: 'part3',
+                                      question: item.en,
+                                      zh: item.zh || topic.title_zh || '',
+                                      prompts: [],
+                                      source: 'question_bank',
+                                      topicName: topic.title_en,
+                                    }}
+                                    label=""
+                                  />
+                                  <button
+                                    className="ghost-button mini"
+                                    onClick={() => startSinglePractice({ part: 'part3', topic: topic.id, question: String(followUpIndex) })}
+                                  >
+                                    <Play size={14} />
+                                    练这题
+                                  </button>
+                                </div>
                               </li>
                             ))}
                           </ol>

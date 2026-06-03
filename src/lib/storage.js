@@ -2,6 +2,7 @@ const SETTINGS_KEY = 'speakeasy_settings_v1';
 const SESSIONS_KEY = 'speakeasy_sessions_v1';
 const QUESTION_BANK_KEY = 'speakeasy_question_bank_v1';
 const RECENT_PART1_KEY = 'speakeasy_recent_part1_v1';
+const FAVORITES_KEY = 'speakeasy_favorites_v1';
 
 export const defaultSettings = {
   part2PrepSeconds: 60,
@@ -83,4 +84,46 @@ export function rememberPart1Questions(questions, limit = 40) {
   if (!ids.length) return;
   const recent = getRecentPart1Questions().filter((id) => !ids.includes(id));
   localStorage.setItem(RECENT_PART1_KEY, JSON.stringify([...ids, ...recent].slice(0, limit)));
+}
+
+export function getFavorites() {
+  try {
+    return JSON.parse(localStorage.getItem(FAVORITES_KEY) || '[]');
+  } catch {
+    return [];
+  }
+}
+
+export function saveFavorite(favorite) {
+  const favorites = getFavorites();
+  const key = favorite.key || buildFavoriteKey(favorite);
+  const existing = favorites.findIndex((item) => item.key === key);
+  const next = {
+    ...favorite,
+    key,
+    id: favorite.id || favorites[existing]?.id || createId('favorite'),
+    createdAt: favorites[existing]?.createdAt || favorite.createdAt || new Date().toISOString(),
+  };
+  if (existing >= 0) favorites[existing] = next;
+  else favorites.unshift(next);
+  localStorage.setItem(FAVORITES_KEY, JSON.stringify(favorites));
+  notifyFavoritesChanged();
+  return next;
+}
+
+export function removeFavorite(key) {
+  localStorage.setItem(FAVORITES_KEY, JSON.stringify(getFavorites().filter((item) => item.key !== key)));
+  notifyFavoritesChanged();
+}
+
+export function isFavoriteKey(key) {
+  return getFavorites().some((item) => item.key === key);
+}
+
+export function buildFavoriteKey(item) {
+  return `${item.part || 'part1'}:${item.question || ''}:${(item.prompts || []).join('|')}`;
+}
+
+function notifyFavoritesChanged() {
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event('speakeasy:favorites'));
 }
